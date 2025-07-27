@@ -18,6 +18,7 @@ https://book.getfoundry.sh/
 
 `cp .env.template .env`
 
+
 ### Build
 
 ```shell
@@ -112,7 +113,7 @@ $ make clean
 $ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
 ```
 
-Used to batch execute all script files ending with `.s.sol` in the `script/` directory for contract deployment.  
+Used to batch execute all script files ending with `.sol` in the `script/` directory for contract deployment.  
 **Supported networks**: `mainnet`, `bsc`, `polygon`, `arbitrum`, `optimism`, `sepolia`, `bsc_testnet`, `local`.
 
 ```shell
