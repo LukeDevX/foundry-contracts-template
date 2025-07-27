@@ -7,6 +7,7 @@ pragma solidity ^0.8.20;
  * @dev By default, token transfers are disabled except between whitelisted addresses.
  *      The owner can enable global transfers or manage the whitelist.
  */
+
 contract KNSToken {
     /// @notice Mapping of addresses allowed to send/receive when transfers are globally disabled
     mapping(address => bool) public transferWhitelist;
@@ -32,8 +33,7 @@ contract KNSToken {
      * @notice Contract constructor that sets the token name, symbol, and initial owner
      * @param initialOwner The address that will be granted ownership of the token contract
      */
-    constructor(address initialOwner, string memory _name, string memory _symbol)
-    {}
+    constructor(address initialOwner, string memory _name, string memory _symbol) {}
 
     /**
      * @notice Modifier that restricts transfers when `isTransferUnrestricted` is false
@@ -52,5 +52,4 @@ contract KNSToken {
         }
         _;
     }
-
 }
