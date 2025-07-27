@@ -4,10 +4,6 @@
 # build 目标：编译合约
 build:; forge build
 
-# 默认参数（可被环境变量或命令行覆盖）
-ANVIL_PORT ?= 8545  # 本地 anvil 节点的端口号
-ANVIL_ENDPOINT ?= https://eth-mainnet.public.blastapi.io  # anvil fork 的主网 URL
-
 
 # test 目标：清理构建并运行所有测试
 .PHONY: test
@@ -31,7 +27,7 @@ cov_report:
 
 # anvil_start 目标：启动本地 anvil 节点，并 fork 主网
 .PHONY: anvil_start
-anvil_start:ß
+anvil_start:
 	@echo "Start running anvil node at PORT: ${ANVIL_PORT}"
 	anvil --block-time 10 --fork-url $(ANVIL_ENDPOINT) --port $(ANVIL_PORT)
 
@@ -86,7 +82,6 @@ abi:
 		fi; \
 	done
 
-
 # clean 目标：删除构建生成的目录
 .PHONY: clean
 clean:
@@ -98,7 +93,6 @@ clean:
 
 # 所有脚本文件
 SCRIPTS := $(shell find script -name "*.sol")
-
 
 # 定义一个部署所有脚本的命令模板（函数式变量）
 define deploy_scripts
@@ -120,20 +114,44 @@ define deploy_scripts
 	done
 endef
 
+
+# deploy 目标：根据指定网络进行部署
+.PHONY: deploy
+deploy:
+	@if [ -z "$(network)" ]; then \
+		echo "❌ 请指定 network 变量，例如：make deploy network=sepolia"; \
+		exit 1; \
+	fi; \
+	if [ "$(network)" = "mainnet" ]; then \
+		$(MAKE) deploy_mainnet; \
+	elif [ "$(network)" = "bsc" ]; then \
+		$(MAKE) deploy_bsc; \
+	elif [ "$(network)" = "polygon" ]; then \
+		$(MAKE) deploy_polygon; \
+	elif [ "$(network)" = "arbitrum" ]; then \
+		$(MAKE) deploy_arbitrum; \
+	elif [ "$(network)" = "optimism" ]; then \
+		$(MAKE) deploy_optimism; \
+	elif [ "$(network)" = "sepolia" ]; then \
+		$(MAKE) deploy_sepolia; \
+	elif [ "$(network)" = "bsc_testnet" ]; then \
+		$(MAKE) deploy_bsc_testnet; \
+	elif [ "$(network)" = "local" ]; then \
+		$(MAKE) deploy_local; \
+	else \
+		echo "不支持的 network=$(network)，支持值为：mainnet, bsc, polygon, arbitrum, optimism, sepolia, bsc_testnet, localhost"; \
+		exit 1; \
+	fi
 # ===================
-# 命令目标区域
+# 添加 $(API_KEY) 则 VERIFY，不添加则不 VERIFY
 # ===================
 .PHONY: deploy_mainnet
 deploy_mainnet:
 	$(call deploy_scripts,Mainnet,$(MAINNET_RPC),$(ETHERSCAN_API_KEY))
 
-.PHONY: deploy_sepolia
-deploy_sepolia:
-	$(call deploy_scripts,Sepolia,$(SEPOLIA_RPC),$(ETHERSCAN_API_KEY))
-
-.PHONY: deploy_bnb_testnet
-deploy_bnb_testnet:
-	$(call deploy_scripts,BNB Testnet,$(BSC_TESTNET_RPC),$(BSCSCAN_API_KEY))
+.PHONY: deploy_bsc
+deploy_bsc:
+	$(call deploy_scripts,BSC,$(BSC_RPC),$(BSCSCAN_API_KEY))
 
 .PHONY: deploy_polygon
 deploy_polygon:
@@ -147,110 +165,18 @@ deploy_arbitrum:
 deploy_optimism:
 	$(call deploy_scripts,Optimism,$(OP_RPC),$(OPSCAN_API_KEY))
 
-
-.PHONY: deploy_local
-deploy_all:
-	@echo "Deploying contracts... "
-	@if [ -z "$(SCRIPTS)" ]; then \
-		echo "没有找到任何 .sol 脚本，请确认目录和文件名"; \
-		exit 1; \
-	fi
-	@for script in $(SCRIPTS); do \
-		echo "部署 $$script ..."; \
-		echo "SCRIPTS = $(SCRIPTS)"; \
-		forge script $$script \
-			--force \
-			--broadcast \
-			--rpc-url http://localhost:8545 \
-			--private-key $(PRIVATE_KEY) \
-	done
-
-
-
-
-# deploy_bnb_testnet 目标：部署合约到 BNB 测试网
-.PHONY: deploy_bnb_testnet
-deploy_bnb_testnet:
-	@echo "Deploying contracts..."
-	forge script script/Deploy_BNBTestnet.sol \
-		--force \
-		--broadcast \
-		--slow \
-		--rpc-url https://bsc-testnet-rpc.publicnode.com \
-		--private-key $(PRIVATE_KEY)
-
-# deploy_sepolia 目标：部署合约到 Sepolia 测试网并验证
 .PHONY: deploy_sepolia
 deploy_sepolia:
-	@echo "Deploying contracts..."
-	forge script script/Deploy_Sepolia.s.sol \
-		--force \
-		--slow \
-		--gas-estimate-multiplier 200 \
-		--broadcast \
-		--rpc-url $(SEPOLIA_RPC) \
-		--private-key $(PRIVATE_KEY) \
-		--verify \
-		--etherscan-api-key $(ETHERSCAN_API_KEY)
+	$(call deploy_scripts,Sepolia,$(SEPOLIA_RPC),$(ETHERSCAN_API_KEY))
 
+.PHONY: deploy_bsc_testnet
+deploy_bsc_testnet:
+	$(call deploy_scripts,BSC_TESTNET,$(BSC_TESTNET_RPC))
 
-# deploy_mainnet 目标：部署合约到主网并验证
-.PHONY: deploy_mainnet
-deploy_mainnet:
-	@echo "Deploying contracts..."
-	forge script script/Deploy_Mainnet.s.sol \
-		--force \
-		--slow \
-		--rpc-url ${MAINNET_RPC} \
-		--verify \
-		--etherscan-api-key ${ETHERSCAN_API_KEY} \
-		--private-key $(PRIVATE_KEY) \
-		--broadcast
-
-.PHONY: deploy_all
-deploy_all:
-	@echo "开始递归部署 scripts/ 下所有 .sol 脚本..."
-	@if [ -z "$(SCRIPTS)" ]; then \
-		echo "没有找到任何 .sol 脚本，请确认目录和文件名"; \
-		exit 1; \
-	fi
-	@for script in $(SCRIPTS); do \
-		echo "部署 $$script ..."; \
-		echo "SCRIPTS = $(SCRIPTS)"; \
-		forge script $$script \
-			--force \
-			--slow \
-			--gas-estimate-multiplier 200 \
-			--broadcast \
-			--rpc-url $(SEPOLIA_RPC) \
-			--private-key $(PRIVATE_KEY) \
-			--verify \
-			--etherscan-api-key $(ETHERSCAN_API_KEY); \
-	done
-
-
-# deploy 目标：根据指定网络进行部署
-.PHONY: deploy
-deploy:
-	@if [ -z "$(network)" ]; then \
-		echo "请指定 network 变量，例如：make deploy network=sepolia"; \
-		exit 1; \
-	fi; \
-	if [ "$(network)" = "local" ]; then \
-		$(MAKE) deploy_local; \
-	elif [ "$(network)" = "sepolia" ]; then \
-		$(MAKE) deploy_all; \
-	elif [ "$(network)" = "bnb" ]; then \
-		$(MAKE) deploy_bnb_testnet; \
-	elif [ "$(network)" = "mainnet" ]; then \
-		$(MAKE) deploy_mainnet; \
-	else \
-		echo "不支持的 network=$(network)，支持值为：local, sepolia, bnb, mainnet"; \
-		exit 1; \
-	fi
-
-
-
+.PHONY: deploy_local
+deploy_local:
+	$(call deploy_scripts,localhost,http://localhost:8545)
+	
 
 
 
