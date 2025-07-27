@@ -1,0 +1,157 @@
+-include .env
+
+build:; forge build
+
+.PHONY: test
+test:
+	forge clean && forge b && forge t
+
+.PHONY: cov_summary
+cov_summary:
+	forge clean && forge b && forge coverage --no-match-coverage "(mocks|script)" --report summary
+
+.PHONY: cov_report
+cov_report:
+	@if [ -d coverage ]; then rm -r coverage; fi
+	@if [ -d report ]; then rm -r report; fi
+	forge clean
+	forge b
+	forge coverage --no-match-coverage "(mocks|script)" --report lcov
+	genhtml lcov.info -o report --branch-coverage --ignore-errors inconsistent
+
+.PHONY: anvil_start
+anvil_start:
+	@echo "Starting anvil node at PORT: ${ANVIL_PORT}"
+	anvil --block-time 10 --fork-url $(ANVIL_ENDPOINT) --port $(ANVIL_PORT)
+
+.PHONY: anvil_fund
+anvil_fund:
+	@echo "Setting balance to 10_000 ether for: $(DEPLOYER)"
+	@curl http://localhost:8545 -X POST -H "Content-Type: application/json" \
+		--data '{"method":"anvil_setBalance","params":["$(strip $(DEPLOYER))","0x021e19e0c9bab2400000"],"id":1,"jsonrpc":"2.0"}'
+	echo "Current balance of $(DEPLOYER):"
+	@cast balance $(DEPLOYER)
+
+SRC_DIR := src
+FLATTEN_DIR := flatten
+ABI_DIR := abis
+OUT_DIR := out/
+SOL_FILES := $(shell find $(SRC_DIR) -type f -name "*.sol")
+JSON_FILES := $(wildcard $(OUT_DIR)/**/*.json)
+
+.PHONY: generate_docs
+generate_docs:
+	@echo "Generating documents..."
+	forge doc --build
+
+.PHONY: flatten
+flatten: $(FLATTEN_DIR)
+
+$(FLATTEN_DIR):
+	mkdir -p $(FLATTEN_DIR)
+	@for file in $(SOL_FILES); do \
+		echo "Flattening $$file..."; \
+		forge flatten $$file --output $(FLATTEN_DIR)/$$(basename $$file); \
+	done
+
+abi:
+	@forge build --silent
+	@mkdir -p $(ABI_DIR)
+	@for f in $(SOL_FILES); do \
+		contract_name=$$(basename $$f); \
+		contract_name=$$(echo $$contract_name | cut -d. -f1); \
+		json_file="$(OUT_DIR)/$$contract_name.sol/$$contract_name.json"; \
+		if [ -f "$$json_file" ]; then \
+			jq '.abi' "$$json_file" > "$(ABI_DIR)/$$contract_name.json"; \
+		else \
+			echo "ABI not found for $$contract_name."; \
+		fi; \
+	done
+
+.PHONY: clean
+clean:
+	@rm -r broadcast
+	@rm -r flatten
+	@rm -r abis
+	@rm -r report
+
+SCRIPTS := $(shell find script -name "*.sol")
+
+define deploy_scripts
+	@echo "Starting batch deployment of $(SCRIPTS) to $(1)..."
+	@if [ -z "$(SCRIPTS)" ]; then \
+		echo "No .sol scripts found. Please check directory and filenames."; \
+		exit 1; \
+	fi
+	@for script in $(SCRIPTS); do \
+		echo "Deploying $$script to $(1)..."; \
+		forge script $$script \
+			--force \
+			--slow \
+			--gas-estimate-multiplier 200 \
+			--broadcast \
+			--rpc-url $(2) \
+			--private-key $(PRIVATE_KEY) \
+			$(if $(3),--verify --etherscan-api-key $(3)); \
+	done
+endef
+
+.PHONY: deploy
+deploy:
+	@if [ -z "$(network)" ]; then \
+		echo "❌ Please specify the network variable, e.g., make deploy network=sepolia"; \
+		exit 1; \
+	fi; \
+	if [ "$(network)" = "mainnet" ]; then \
+		$(MAKE) deploy_mainnet; \
+	elif [ "$(network)" = "bsc" ]; then \
+		$(MAKE) deploy_bsc; \
+	elif [ "$(network)" = "polygon" ]; then \
+		$(MAKE) deploy_polygon; \
+	elif [ "$(network)" = "arbitrum" ]; then \
+		$(MAKE) deploy_arbitrum; \
+	elif [ "$(network)" = "optimism" ]; then \
+		$(MAKE) deploy_optimism; \
+	elif [ "$(network)" = "sepolia" ]; then \
+		$(MAKE) deploy_sepolia; \
+	elif [ "$(network)" = "bsc_testnet" ]; then \
+		$(MAKE) deploy_bsc_testnet; \
+	elif [ "$(network)" = "local" ]; then \
+		$(MAKE) deploy_local; \
+	else \
+		echo "Unsupported network=$(network). Supported values: mainnet, bsc, polygon, arbitrum, optimism, sepolia, bsc_testnet, localhost"; \
+		exit 1; \
+	fi
+
+# Deploy contracts to various networks; verification runs only if the corresponding API key (third parameter) is set
+.PHONY: deploy_mainnet
+deploy_mainnet:
+	$(call deploy_scripts,Mainnet,$(MAINNET_RPC),$(ETHERSCAN_API_KEY))
+
+.PHONY: deploy_bsc
+deploy_bsc:
+	$(call deploy_scripts,BSC,$(BSC_RPC),$(BSCSCAN_API_KEY))
+
+.PHONY: deploy_polygon
+deploy_polygon:
+	$(call deploy_scripts,Polygon,$(POLYGON_RPC),$(POLYGONSCAN_API_KEY))
+
+.PHONY: deploy_arbitrum
+deploy_arbitrum:
+	$(call deploy_scripts,Arbitrum,$(ARB_RPC),$(ARBISCAN_API_KEY))
+
+.PHONY: deploy_optimism
+deploy_optimism:
+	$(call deploy_scripts,Optimism,$(OP_RPC),$(OPSCAN_API_KEY))
+
+.PHONY: deploy_sepolia
+deploy_sepolia:
+	$(call deploy_scripts,Sepolia,$(SEPOLIA_RPC),$(ETHERSCAN_API_KEY))
+
+.PHONY: deploy_bsc_testnet
+deploy_bsc_testnet:
+	$(call deploy_scripts,BSC_TESTNET,$(BSC_TESTNET_RPC))
+
+.PHONY: deploy_local
+deploy_local:
+	$(call deploy_scripts,localhost,http://localhost:8545)

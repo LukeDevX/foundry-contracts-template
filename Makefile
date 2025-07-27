@@ -144,6 +144,7 @@ deploy:
 	fi
 # ===================
 # 添加 $(API_KEY) 则 VERIFY，不添加则不 VERIFY
+# Deploy contracts to various networks; verification runs only if the corresponding API key (third parameter) is set
 # ===================
 .PHONY: deploy_mainnet
 deploy_mainnet:
