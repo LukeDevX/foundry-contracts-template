@@ -18,7 +18,7 @@ contract CounterScript is Script {
         return id;
     }
 
-     function run() public {
+    function run() public {
         vm.startBroadcast();
         uint256 chainId = getChainID();
         console.log("chain id: ", chainId);
@@ -28,6 +28,5 @@ contract CounterScript is Script {
 
         vm.stopBroadcast();
         console.log("counter deployed at: ", address(counter));
-
     }
 }
