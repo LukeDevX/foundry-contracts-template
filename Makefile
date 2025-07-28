@@ -92,7 +92,7 @@ clean:
 
 
 # 所有脚本文件
-SCRIPTS := $(shell find script -name "*.sol")
+SCRIPTS := $(shell find script -name "*.s.sol")
 
 # 定义一个部署所有脚本的命令模板（函数式变量）
 define deploy_scripts
